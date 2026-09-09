@@ -1,0 +1,28 @@
+# Virtual environment
+.venv/
+
+# Environment variables / secrets
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Testing/cache
+.pytest_cache/
+.mypy_cache/
+
+# Chroma / generated vector databases
+chroma_db/
+
+# Runtime uploaded files
+.runtime_uploads/
+
+# Generated/processed data
+data/processed/
+
+# OS files
+.DS_Store
+Thumbs.db
