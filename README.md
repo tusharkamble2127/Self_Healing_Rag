@@ -1,282 +1,158 @@
 # 🧠 Self-Healing RAG
 
-A multi-domain Retrieval-Augmented Generation (RAG) system built with **LangChain, LangGraph, ChromaDB, Hugging Face embeddings, Gemini, and Streamlit**.
+A multi-domain Retrieval-Augmented Generation (RAG) system built with **LangChain, LangGraph, ChromaDB, Sentence Transformers, Gemini, and Streamlit**.
 
-Unlike a traditional RAG pipeline that simply retrieves documents and generates an answer, this system **evaluates its own answer** and can automatically **rewrite the search query, retrieve better evidence, and retry the generation** when the answer is not sufficiently grounded.
+Unlike a traditional RAG pipeline, this system checks whether its generated answer is grounded in retrieved evidence. When retrieval or generation is weak, it can **rewrite the retrieval query, retry, and safely refuse** when sufficient evidence is unavailable.
 
-The final application also supports **runtime PDF uploads**, so users can create a temporary knowledge base directly from the UI instead of manually placing documents into a fixed folder.
+The Streamlit application also supports **runtime PDF uploads**, allowing users to build a temporary knowledge base directly from the UI.
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+---
 
-## 📌 Project Overview
+## 📌 Key Features
 
-### Problem
+- Multi-domain PDF support: **Research, Company, College, Technical**
+- Runtime PDF upload through Streamlit
+- Semantic retrieval with ChromaDB
+- Local reranking using semantic + lexical relevance
+- Relevance threshold to reject weak retrieval
+- Gemini-based answer generation
+- Structured grounding critic
+- Automatic query rewriting and retry using LangGraph
+- Safe refusal for unsupported questions
+- Source and page information in answers
+- Optional domain filtering
 
-A conventional RAG system follows:
-User Question
-      ↓
-Retrieve Documents
-      ↓
-Generate Answer
-      ↓
-Return Answer
+---
 
+## 🔄 How It Works
 
-This has a major weakness: if retrieval is poor, the generated answer may be incomplete, unsupported, or hallucinated.
+### Traditional RAG
 
-### Proposed Solution
-
-This project adds a **grounding critic** and a **self-healing loop**:
-
-User Question
-      ↓
-Retrieve Relevant Chunks
-      ↓
-Generate Answer
-      ↓
-Critic / Grounding Check
-      ↓
-   Is Answer Grounded?
-      ├───────────────┐
-      │ YES           │ NO
-      ↓              ↓
- Final Answer     Rewrite Query
-                      ↓
-                Re-retrieve
-                      ↓
-                 Generate Again
-                      ↓
-                    Critic
-                      ↺
-
-
-If repeated attempts still fail, the system does not invent an answer. It safely returns:
-
-> "I don't have enough information in the available documents to provide a reliable answer."
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# 🎯 Objectives
-
-The main objectives of the project are:
-
-1. Build a reliable Retrieval-Augmented Generation system.
-2. Support multiple document domains.
-3. Retrieve semantically relevant document chunks.
-4. Improve retrieval using local reranking.
-5. Detect unsupported or hallucinated answers.
-6. Automatically reformulate failed queries.
-7. Retry retrieval and generation using LangGraph.
-8. Refuse to answer when sufficient evidence is unavailable.
-9. Show trustworthy source information with page numbers.
-10. Provide a user-friendly Streamlit interface for uploading PDFs and asking questions.
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# 🧩 Supported Knowledge Domains
-
-The application is designed to work with mixed-domain PDF collections.
-
-### 🔬 Research
-
-Examples:
-
-- Research papers
-- Scientific papers
-- Experimental reports
-- Technical research documents
-
-### 🏢 Company
-
-Examples:
-
-- Employee handbooks
-- HR policies
-- Leave policies
-- Workplace policies
-- Benefits and insurance policies
-
-### 🎓 College
-
-Examples:
-
-- Student handbooks
-- Academic regulations
-- Attendance policies
-- Scholarship policies
-- Examination rules
-
-### 💻 Technical
-
-Examples:
-
-- Software documentation
-- Database documentation
-- Administrator guides
-- API documentation
-- Developer manuals
-
-The UI can search:
-All
-Research
-Company
-College
-Technical
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# 🏗️ System Architecture
-
-## High-Level Architecture
-
-
-                         ┌───────────────────────┐
-                         │      Streamlit UI     │
-                         └───────────┬───────────┘
-                                     │
-                              Upload PDF files
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │    PDF Processing     │
-                         │  PyPDFLoader + Split  │
-                         └───────────┬───────────┘
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │    Domain Detection   │
-                         │ Research / Company    │
-                         │ College / Technical   │
-                         └───────────┬───────────┘
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │   Embedding Model     │
-                         │ all-MiniLM-L6-v2      │
-                         └───────────┬───────────┘
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │       ChromaDB        │
-                         │     Vector Store      │
-                         └───────────┬───────────┘
-                                     │
-                                  Query
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │       Retriever       │
-                         │ Semantic Search       │
-                         │ + Lexical Reranking   │
-                         │ + Relevance Threshold │
-                         └───────────┬───────────┘
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │       Generator       │
-                         │      Gemini LLM       │
-                         └───────────┬───────────┘
-                                     │
-                                     ▼
-                         ┌───────────────────────┐
-                         │      Critic Agent      │
-                         │   Grounding Check      │
-                         └───────────┬───────────┘
-                                     │
-                            ┌────────┴────────┐
-                            │                 │
-                         Grounded          Rejected
-                            │                 │
-                            ▼                 ▼
-                         Success        Query Rewriter
-                                              │
-                                              ▼
-                                         Re-retrieve
-                                              │
-                                              └───────↺
-
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# 🔄 LangGraph Workflow
-
-The core agentic workflow is implemented using **LangGraph** as a stateful, cyclic graph.
-
-START
-  ↓
-retrieve
-  ↓
-generate
-  ↓
-critic
-  ↓
-┌───────────────┬────────────────┬─────────────┐
-│               │                │
-accepted      rewrite          failed
-│               │                │
-▼               ▼                ▼
-success       retrieve         failure
-│               ↺                │
-▼                                ▼
-END                              END
-
-## Graph State
-
-The graph maintains information such as:
-
-```python
-{
-    "question": ...,
-    "current_query": ...,
-    "documents": ...,
-    "answer": ...,
-    "grounded": ...,
-    "confidence": ...,
-    "critique_reason": ...,
-    "retry_count": ...,
-    "final_response": ...,
-    "trace": ...,
-    "domain": ...
-}
+```text
+Question
+   ↓
+Retrieve
+   ↓
+Generate
+   ↓
+Answer
 ```
 
-The original user question remains unchanged. Only the **retrieval query** can be rewritten during self-healing.
+### Self-Healing RAG
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+```text
+Question
+   ↓
+Retrieve
+   ↓
+Generate
+   ↓
+Critic
+   ├── Grounded → Final Answer
+   └── Rejected → Rewrite Query
+                     ↓
+                  Retrieve Again
+                     ↓
+                  Generate Again
+                     ↓
+                    Critic
+```
 
-# 📚 Document Processing Pipeline
+After the retry limit is reached, the system returns a safe refusal instead of inventing an answer.
 
-When PDFs are uploaded:
+---
+
+## 🏗️ Architecture
+
+```text
+                    ┌─────────────────┐
+                    │  Streamlit UI   │
+                    └────────┬────────┘
+                             │
+                       Upload PDFs
+                             ↓
+                    ┌─────────────────┐
+                    │ PDF Processing  │
+                    │ PyPDF + Splitter│
+                    └────────┬────────┘
+                             ↓
+                    ┌─────────────────┐
+                    │ Domain Detection│
+                    └────────┬────────┘
+                             ↓
+                    ┌─────────────────┐
+                    │    Embeddings   │
+                    │ all-MiniLM-L6-v2│
+                    └────────┬────────┘
+                             ↓
+                    ┌─────────────────┐
+                    │    ChromaDB     │
+                    └────────┬────────┘
+                             ↓
+                       User Question
+                             ↓
+                    ┌─────────────────┐
+                    │   Retriever     │
+                    │ + Reranking     │
+                    │ + Threshold     │
+                    └────────┬────────┘
+                             ↓
+                    ┌─────────────────┐
+                    │ Gemini Generator│
+                    └────────┬────────┘
+                             ↓
+                    ┌─────────────────┐
+                    │ Grounding Critic│
+                    └───────┬─┬───────┘
+                            │ │
+                     Accept │ │ Reject
+                            │ └──────→ Query Rewriter
+                            ↓                    │
+                         Answer            Re-retrieve
+```
+
+---
+
+## 🧩 Supported Domains
+
+| Domain | Example Documents |
+|---|---|
+| 🔬 Research | Research papers, scientific papers |
+| 🏢 Company | Employee handbooks, HR policies |
+| 🎓 College | Student handbooks, attendance rules |
+| 💻 Technical | Software and database documentation |
+
+The user can search **all domains** or select one specific domain.
+
+---
+
+## 📚 Document Processing
+
+Uploaded PDFs follow this pipeline:
+
+```text
 PDF
  ↓
 Page Extraction
  ↓
-Metadata Assignment
- ↓
-Domain Detection
+Metadata + Domain Detection
  ↓
 Chunking
  ↓
-Embedding Generation
+Embeddings
  ↓
 ChromaDB
+```
 
-
-## Chunking
-
-The project currently uses:
+### Chunking
 
 - `RecursiveCharacterTextSplitter`
-- Chunk size: approximately 1000 characters
-- Chunk overlap: approximately 150 characters
+- Chunk size: **1000 characters**
+- Chunk overlap: **150 characters**
 
-The overlap helps preserve context across chunk boundaries.
+### Metadata
 
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# 🏷️ Metadata
-
-Each document chunk stores useful metadata such as:
+Each chunk stores metadata such as:
 
 ```python
 {
@@ -288,30 +164,18 @@ Each document chunk stores useful metadata such as:
 }
 ```
 
-This metadata is used for:
+---
 
-- Domain filtering
-- Source display
-- Page references
-- Debugging
-- Retrieval analysis
-- Evaluation
+## 🔎 Retrieval and Reranking
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+The retriever first gets candidate chunks from ChromaDB and then reranks them.
 
-# 🔎 Retrieval System
-
-The retriever does not simply take the first four vector-search results.
-
-The current pipeline is:
-
+```text
 Query
  ↓
-ChromaDB Candidate Search
+Candidate Search
  ↓
-Semantic Distance
- ↓
-Normalized Semantic Score
+Semantic Score
  +
 Lexical Overlap
  ↓
@@ -320,89 +184,39 @@ Combined Rerank Score
 Relevance Threshold
  ↓
 Top Relevant Chunks
+```
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+This reduces the chance of sending unrelated context to the LLM.
 
-# 🧠 Embeddings
-
-The project uses:
+The embedding model is:
 
 ```text
 sentence-transformers/all-MiniLM-L6-v2
 ```
 
-Embeddings are generated locally.
-
-Advantages:
-
-- No embedding API cost
-- Fast enough for development
-- Works well for semantic retrieval
-- Keeps the vector-search layer local
+Embeddings run locally, so no separate embedding API is required.
 
 ---
 
-# 🗄️ Vector Database
+## 🤖 LLM Components
 
-The vector store is:
-
-```text
-ChromaDB
-```
-
-Two modes are supported conceptually:
-
-### Persistent Development Mode
-
-The original ingestion pipeline can build:
-
-```text
-chroma_db/
-```
-
-from documents stored under:
-
-```text
-data/raw/
-```
-
-### Runtime Upload Mode
-
-The final Streamlit application builds a temporary vector database from files uploaded during the current session.
-
-This runtime knowledge base is intentionally separated from the persistent development database.
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# 🤖 LLM Layer
-
-Gemini is used for:
+Gemini is used for three tasks:
 
 ### 1. Answer Generation
 
-The LLM receives:
+The model receives the question and retrieved context and is instructed to answer only from that context.
 
-```text
-User Question
-+
-Retrieved Context
-```
+### 2. Grounding Critic
 
-and must answer only from the supplied context.
-
-### 2. Critic Agent
-
-The critic evaluates:
+The critic checks:
 
 ```text
 Question
-+
-Retrieved Context
-+
-Generated Answer
++ Retrieved Context
++ Generated Answer
 ```
 
-and returns structured information such as:
+and returns structured output such as:
 
 ```json
 {
@@ -412,9 +226,9 @@ and returns structured information such as:
 }
 ```
 
-### 3. Query Rewriter
+### 3. Query Rewriting
 
-If the critic rejects the answer, the query rewriter creates a more retrieval-friendly search query.
+When an answer is rejected, the system creates a more retrieval-friendly query without changing the original user intent.
 
 Example:
 
@@ -429,48 +243,84 @@ write examinations
 
 ---
 
-# 🩺 Self-Healing Mechanism
+## 🔁 LangGraph Workflow
 
-The self-healing mechanism works like this:
-
-### Attempt 1
+The self-healing workflow is implemented as a cyclic LangGraph:
 
 ```text
-Question
- ↓
-Retrieve
- ↓
-Generate
- ↓
-Critic
+START
+  ↓
+retrieve
+  ↓
+generate
+  ↓
+critic
+  ├── success → END
+  ├── rewrite → retrieve
+  └── failure → END
 ```
 
-If grounded:
+The graph state tracks values such as:
 
-```text
-→ Return answer
+```python
+{
+    "question": ...,
+    "current_query": ...,
+    "documents": ...,
+    "answer": ...,
+    "grounded": ...,
+    "confidence": ...,
+    "retry_count": ...,
+    "final_response": ...,
+    "domain": ...
+}
 ```
 
-If rejected:
-
-```text
-→ Rewrite query
-→ Retrieve again
-→ Generate again
-→ Critic again
-```
+The original question is preserved; only the retrieval query is rewritten.
 
 ### Retry Limit
-
-Current maximum retry count:
 
 ```text
 MAX_RETRIES = 2
 ```
 
-Therefore the system can perform up to three retrieval/generation attempts including the initial attempt.
+So the system can make up to **3 total attempts**, including the first attempt.
 
-If all attempts fail:
+---
+
+## 🧪 Self-Healing Verification
+
+The recovery loop was tested using a controlled development test:
+
+```text
+Incorrect first answer
+        ↓
+Critic rejects it
+        ↓
+Query rewritten
+        ↓
+Better evidence retrieved
+        ↓
+Correct answer generated
+        ↓
+Critic accepts it
+```
+
+The intentional test hook was removed from the production workflow after verification.
+
+---
+
+## 🛡️ Safe Refusal
+
+The system is designed not to answer using unrelated evidence.
+
+For an unsupported question such as:
+
+```text
+What is the current temperature on Mars?
+```
+
+weak retrieval can be rejected before generation, resulting in:
 
 ```text
 I don't have enough information in the available documents
@@ -479,187 +329,89 @@ to provide a reliable answer.
 
 ---
 
-# 🧪 Self-Healing Verification
+## 🖥️ Streamlit Application
 
-The self-healing mechanism was explicitly tested using a controlled development test.
+The UI supports:
 
-The first answer was deliberately made incorrect:
+- Multiple PDF uploads
+- Mixed-domain documents
+- Automatic domain detection
+- Knowledge-base processing
+- Domain selection
+- Natural-language questions
+- Verified answers
+- Retry count
+- Grounded status
+- Confidence score
+- Source/page information
 
-```text
-The minimum attendance requirement is 50%...
-```
-
-The critic detected the problem:
-
-```text
-Grounded = False
-```
-
-The system then rewrote the query:
-
-```text
-minimum attendance requirement percentage eligibility policy
-write examinations
-```
-
-The second attempt retrieved better evidence and produced the correct answer:
-
-```text
-80% attendance
-```
-
-The critic then accepted the result:
-
-```text
-Grounded = True
-```
-
-This proved that the cyclic recovery workflow works as intended.
-
-The intentional test hook was removed from the production workflow afterward.
+The internal LangGraph trace remains available in the backend for debugging and evaluation.
 
 ---
 
-# 🛡️ Safe Refusal
-
-A major design goal is to avoid hallucination.
-
-For questions outside the knowledge base, the retriever can reject weak matches before an LLM call.
-
-Example:
+## 📁 Project Structure
 
 ```text
-Question:
-What is the current temperature on Mars?
-```
-
-Result:
-
-```text
-No sufficiently relevant documents found.
-```
-
-The LLM is not given unrelated context.
-
-This creates:
-
-```text
-Out-of-domain Question
-        ↓
-Weak Retrieval
-        ↓
-Threshold Rejection
-        ↓
-Safe Refusal
+Self_Healing_Rag/
+│
+├── src/
+│   ├── app.py
+│   ├── config.py
+│   ├── critic.py
+│   ├── generator.py
+│   ├── graph_rag.py
+│   ├── ingest.py
+│   ├── main.py
+│   ├── retriever.py
+│   ├── rewriter.py
+│   ├── runtime_kb.py
+│   ├── self_healing_rag.py
+│   └── vector_store.py
+│
+├── data/
+│   └── raw/
+│       ├── college/
+│       ├── company/
+│       ├── research/
+│       └── technical/
+│
+├── tests/
+├── requirements.txt
+├── README.md
+└── .gitignore
 ```
 
 ---
 
-# 🖥️ Streamlit Application
+## ⚙️ Installation
 
-The final interface provides:
-
-### Knowledge Base
-
-Users can:
-
-- Upload multiple PDFs
-- Upload mixed-domain documents
-- Process the documents
-- See document/chunk counts
-- See detected domains
-- Clear the current knowledge base
-
-### Question Interface
-
-Users can:
-
-- Ask natural-language questions
-- Search all domains
-- Optionally select a specific domain
-- View the verified answer
-
-### Result Information
-
-The UI displays:
-
-```text
-Answer
-Retries
-Grounded
-Confidence
-Sources
-```
-
-The internal LangGraph trace is retained in the backend for evaluation/debugging but is intentionally hidden from the main UI.
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# ⚙️ Installation
-
-## 1. Clone / open the project
-
-```powershell
-cd F:\self-healing-rag-Project
-```
-
-Use your own project path if it is different.
-
----
-
-## 2. Create a virtual environment
+### 1. Create and activate virtual environment
 
 ```powershell
 python -m venv .venv
-```
-
-Activate it:
-
-```powershell
 .venv\Scripts\activate
 ```
 
-You should see:
-
-```text
-(.venv)
-```
-
-in the terminal prompt.
-
----
-
-## 3. Install dependencies
+### 2. Install dependencies
 
 ```powershell
 python -m pip install -U pip
-```
-
-Then:
-
-```powershell
 pip install -r requirements.txt
 ```
--------------------------------------------------------------------------------------------------------------------------------------------------
 
-Recommended `.gitignore` entries:
+### 3. Configure Gemini API key
 
-```gitignore
-.venv/
-.env
-__pycache__/
-*.pyc
-.pytest_cache/
-chroma_db/
-data/processed/
-.runtime_uploads/
+Create `.env`:
+
+```env
+GEMINI_API_KEY=your_key_here
 ```
+
+Do not commit `.env` to GitHub.
 
 ---
 
-# ▶️ Running the Application
-
-The final application is a Streamlit app.
+## ▶️ Run the Application
 
 From the project root:
 
@@ -667,230 +419,85 @@ From the project root:
 streamlit run src/app.py
 ```
 
-Streamlit will display a local URL.
-
-Open the URL in your browser.
+Open the local Streamlit URL shown in the terminal.
 
 ---
 
-# 📤 Using the Runtime Upload Mode
+## 📤 Using the Runtime Knowledge Base
 
-## Step 1 — Open the Knowledge Base panel
+1. Open the left sidebar.
+2. Upload one or more PDFs.
+3. Click **Process Documents**.
+4. Select **All** or a specific domain.
+5. Enter a question.
+6. View the grounded answer and sources.
 
-The application keeps the Knowledge Base/upload controls in the left sidebar.
-
-If the sidebar is collapsed, click the:
-
-```text
-»
-```
-
-arrow in the top-left corner.
-
-## Step 2 — Upload PDFs
-
-You can upload multiple PDF files in one batch.
-
-Example:
-
-```text
-research_paper_1.pdf
-research_paper_2.pdf
-employee_handbook.pdf
-leave_policy.pdf
-student_handbook.pdf
-attendance_policy.pdf
-mysql_manual.pdf
-technical_guide.pdf
-```
-
-## Step 3 — Process
-
-Click:
-
-```text
-Process Documents
-```
-
-The application:
-
-```text
-Reads PDFs
- ↓
-Detects domain
- ↓
-Chunks text
- ↓
-Generates embeddings
- ↓
-Builds runtime ChromaDB
-```
-
-## Step 4 — Ask Questions
-
-Choose:
-
-```text
-All
-```
-
-or a specific domain:
-
-```text
-Research
-Company
-College
-Technical
-```
-
-Then ask your question.
+The runtime knowledge base is temporary and belongs to the current application session.
 
 ---
 
-# 🧪 Example Questions
+## 🧪 Example Questions
 
-## College
-
+**College**
 ```text
 What is the minimum attendance requirement?
 ```
 
-## Research
-
+**Research**
 ```text
 What is the main idea behind the Transformer architecture?
 ```
 
-## Company
-
+**Company**
 ```text
 What are the employee leave policies?
 ```
 
-## Technical
-
+**Technical**
 ```text
 What is the purpose of the Diagnostics and Recovery Toolset?
 ```
 
-## Unknown / Out-of-domain
-
+**Out-of-domain**
 ```text
 What is the current temperature on Mars?
 ```
 
-The last type of question should result in a safe refusal when the knowledge base does not contain the required evidence.
+---
 
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# 🧰 Main Technologies
+## 🧰 Technologies
 
 | Technology | Purpose |
 |---|---|
-| Python | Core development language |
-| LangChain | RAG/LLM integration |
-| LangGraph | Stateful cyclic workflow |
-| ChromaDB | Vector storage |
+| Python | Core development |
+| LangChain | RAG and LLM integration |
+| LangGraph | Stateful self-healing workflow |
+| ChromaDB | Vector store |
 | Sentence Transformers | Local embeddings |
-| Gemini | Answer generation, criticism, query rewriting |
-| PyPDF | PDF text extraction |
-| Streamlit | Web interface |
-| Pydantic | Structured critic outputs |
+| Gemini | Generation, critic, query rewriting |
+| PyPDF | PDF extraction |
+| Streamlit | User interface |
+| Pydantic | Structured outputs |
 
 ---
 
-# 📊 Example End-to-End Flow
+## 📊 Evaluation
 
-Suppose a user uploads:
+For academic evaluation, compare:
 
-```text
-karunya_student_handbook.pdf
-burrell_student_handbook.pdf
-```
-
-and asks:
+### Standard RAG
 
 ```text
-What is the minimum attendance requirement?
+Retrieve → Generate
 ```
 
-The system performs:
+### Self-Healing RAG
 
 ```text
-1. PDF Upload
-        ↓
-2. Page Extraction
-        ↓
-3. Domain = College
-        ↓
-4. Chunking
-        ↓
-5. Embeddings
-        ↓
-6. ChromaDB
-        ↓
-7. Semantic Retrieval
-        ↓
-8. Local Reranking
-        ↓
-9. Relevance Threshold
-        ↓
-10. Gemini Answer Generation
-        ↓
-11. Grounding Critic
-        ↓
-12. Grounded = True
-        ↓
-13. Final Answer + Sources
+Retrieve → Generate → Critic → Rewrite/Retry
 ```
 
-If the critic rejects the answer:
-
-```text
-Critic = False
-      ↓
-Query Rewriter
-      ↓
-New Query
-      ↓
-Re-retrieve
-      ↓
-Generate Again
-      ↓
-Critic
-      ↓
-Grounded = True
-      ↓
-Final Answer
-```
-
----
-
-# 📈 Evaluation Plan
-
-For final academic evaluation, the system should be compared with a standard RAG baseline.
-
-## Baseline RAG
-
-```text
-Retrieve
- ↓
-Generate
-```
-
-## Self-Healing RAG
-
-```text
-Retrieve
- ↓
-Generate
- ↓
-Critic
- ↓
-Rewrite / Retry
-```
-
-Recommended evaluation metrics:
+Useful metrics:
 
 - Answer correctness
 - Groundedness
@@ -901,119 +508,56 @@ Recommended evaluation metrics:
 - Safe-refusal accuracy
 - Response time
 
-A comparison table can be built from actual test results:
+Use actual experiment results rather than estimated values.
 
-| Metric | Standard RAG | Self-Healing RAG |
-|---|---:|---:|
-| Correct answers | Measured | Measured |
-| Grounded answers | Measured | Measured |
-| Hallucination rate | Measured | Measured |
-| Successful recoveries | — | Measured |
-| Average retries | — | Measured |
-| Safe refusals | Measured | Measured |
+---
 
-Do not fill these values with invented numbers; they should come from the project's evaluation runs.
+## ⚠️ Limitations
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+- PDF quality affects extraction quality.
+- Scanned PDFs may require OCR.
+- Domain detection is heuristic.
+- Ambiguous questions may still be difficult.
+- Larger collections may need stronger retrieval/reranking.
+- Runtime knowledge bases are session-based.
+- Gemini availability and rate limits may affect generation.
+- `all-MiniLM-L6-v2` is a lightweight embedding model.
 
-# ⚠️ Current Limitations
+---
 
-The system is designed for high reliability, but no RAG system can guarantee perfect accuracy for arbitrary documents.
+## 🚀 Future Scope
 
-Current limitations include:
-
-1. PDF parsing quality depends on the source PDF.
-2. Scanned/image-only PDFs may require OCR.
-3. Automatic domain detection is heuristic.
-4. Very ambiguous questions may require user clarification.
-5. Larger document collections may require more advanced vector indexing/reranking.
-6. Runtime knowledge bases are session-based and are not automatically persisted.
-7. Gemini API availability/rate limits can affect generation.
-8. The current embedding model is lightweight rather than a specialized domain embedding model.
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-# 🚀 Future Scope
-
-Possible upgrades include:
-
-- OCR support for scanned PDFs
-- Persistent user-specific knowledge bases
-- Document deletion/update
+- OCR for scanned PDFs
 - Hybrid BM25 + vector retrieval
 - Cross-encoder reranking
 - Better domain classification
-- Automatic ambiguity detection
+- Persistent user knowledge bases
 - Conversation memory
 - Streaming responses
-- Advanced evaluation dashboard
-- Retrieval analytics
-- User authentication
-- Cloud deployment
-- Multi-user knowledge bases
-- Database-backed document management
-- Support for additional file types such as DOCX and TXT
+- Evaluation dashboard
+- Authentication and cloud deployment
+- DOCX/TXT support
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+---
 
-# 📜 Project Workflow Summary
-
-The final system can be summarized as:
+## 📌 Project Summary
 
 ```text
-                  USER
-                   │
-                   ▼
-            Upload PDF Files
-                   │
-                   ▼
-           Document Processing
-                   │
-                   ▼
-             Domain Detection
-                   │
-                   ▼
-                Chunking
-                   │
-                   ▼
-              Embeddings
-                   │
-                   ▼
-               ChromaDB
-                   │
-                   ▼
-              User Question
-                   │
-                   ▼
-              Retrieval
-                   │
-                   ▼
-               Reranking
-                   │
-                   ▼
-          Relevance Threshold
-                   │
-              ┌────┴────┐
-              │         │
-          Relevant   Not Relevant
-              │         │
-              ▼         ▼
-          Generation   Safe Refusal
-              │
-              ▼
-            Critic
-              │
-        ┌─────┴─────┐
-        │           │
-     Grounded    Rejected
-        │           │
-        ▼           ▼
-      Answer    Query Rewrite
-                    │
-                    ▼
-                 Retrieve
-                    │
-                    └─────────────↺
+Upload PDFs
+    ↓
+Process + Detect Domain
+    ↓
+Chunk + Embed
+    ↓
+Store in ChromaDB
+    ↓
+Retrieve + Rerank
+    ↓
+Generate with Gemini
+    ↓
+Critic Checks Grounding
+    ├── Accept → Final Answer
+    └── Reject → Rewrite → Retry
 ```
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+The main goal is to make RAG more reliable by combining **retrieval, generation, evaluation, recovery, and safe refusal** in one LangGraph-based workflow.
