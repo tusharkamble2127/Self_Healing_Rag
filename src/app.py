@@ -514,18 +514,15 @@ ask = st.button(
 # ============================================================
 # EXECUTE QUERY
 # ============================================================
-
 if ask:
     if not question.strip():
         st.warning(
             "Please enter a question."
         )
-
     elif not ensure_uploaded_store_active():
         st.warning(
             "Upload and process your PDFs first."
         )
-
     else:
         st.session_state.last_result = None
 
@@ -543,10 +540,23 @@ if ask:
                 )
 
             except Exception as exc:
-                st.error(
-                    "The question could not be processed."
-                )
-                st.exception(exc)
+                error_message = str(exc)
+
+                if "503" in error_message or "UNAVAILABLE" in error_message:
+                    st.error(
+                        "⚠️ Gemini is temporarily busy. "
+                        "Please wait a few seconds and try again."
+                    )
+                elif "429" in error_message:
+                    st.error(
+                        "⚠️ Gemini API request limit reached. "
+                        "Please wait and try again."
+                    )
+                else:
+                    st.error(
+                        "⚠️ The question could not be processed. "
+                        "Please try again."
+                    )
 
 
 # ============================================================

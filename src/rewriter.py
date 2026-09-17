@@ -40,7 +40,7 @@ def get_rewriter():
         model="gemini-3.6-flash",
         temperature=0,
         google_api_key=api_key,
-        max_retries=1,
+        max_retries=3,
     )
 
     return llm.with_structured_output(RewrittenQuery)

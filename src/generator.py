@@ -19,7 +19,7 @@ def get_llm():
         model="gemini-3.6-flash",
         temperature=0,
         google_api_key=api_key,
-        max_retries=1,
+        max_retries=3,
     )
 
 
