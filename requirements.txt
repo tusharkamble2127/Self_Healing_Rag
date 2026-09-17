@@ -10,4 +10,12 @@ sentence-transformers
 langchain-huggingface
 langchain-chroma
 langchain-openai
-streamlit
+langchain
+langchain-community
+langchain-text-splitters
+langchain-chroma
+langchain-huggingface
+langchain-google-genai
+sentence-transformers
+python-dotenv
+pydantic
